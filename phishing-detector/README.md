@@ -9,12 +9,12 @@ The system scans the input text against **10 detection criteria** grouped by sev
 | Level | Points | Criteria |
 |-------|--------|----------|
 | HIGH  | 3 | Urgent language, Suspicious URL, Credential request, Spoofed sender |
-| MED   | 2 | Reward/prize, Threat/fear, Impersonation, Generic greeting |
-| LOW   | 1 | Grammar errors, Excessive CAPS/exclamation |
+| MED   | 2 | Grammar errors, Reward/prize, Threat/fear, Impersonation, Generic greeting |
+| LOW   | 1 | Excessive CAPS|
 
-### Risk Score → Verdict
+### Risk Score → Result
 
-| Score | Verdict | Risk Level |
+| Score | Result | Risk Level |
 |-------|---------|------------|
 | 0 | CLEAN | None |
 | 1–2 | SUSPICIOUS | Low |
