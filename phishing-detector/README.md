@@ -93,9 +93,9 @@ python main.py --demo
 
 ```
 phishing-detector/
-├── main.py              # CLI entry point
-├── src/
-│   └── detector.py      # Detection engine + criteria
+├── code/
+│   ├── detector.py      # Detection engine + criteria
+│   ├── main.py          # entry point
 ├── examples/
 │   ├── example_high.txt
 │   ├── example_medium.txt
@@ -103,6 +103,6 @@ phishing-detector/
 │   ├── example_clean.txt
 │   └── example_hebrew.txt
 ├── docs/
-│   └── research.md      # Research document
+│   └── phishing_research.docx   # Research document
 └── README.md
 ```
