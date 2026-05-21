@@ -1,0 +1,4 @@
+Dear Account Holder, your bank account has been locked due to suspicious activity.
+Click here to verify your identity: http://192.168.1.55/bank/verify
+Enter your PIN and social security number to unlock your account immediately.
+Failure to comply within 24 hours will result in legal action.

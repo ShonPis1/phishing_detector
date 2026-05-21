@@ -1,0 +1,3 @@
+Dear valued customer, your account has been suspended due to unusual activity.
+Failure to verify your identity will result in permanent account termination.
+Please contact Microsoft support team immediately.

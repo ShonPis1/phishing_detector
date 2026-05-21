@@ -1,0 +1,4 @@
+Dear Customer, your PayPal account has been suspended.
+Verify your details immediately at http://paypa1-secure.com/login
+or your account will be terminated within 24 hours.
+Enter your password and credit card to restore access.

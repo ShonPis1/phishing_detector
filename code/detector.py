@@ -1,42 +1,92 @@
 """
-Phishing Message Detection System
-detector.py — Core detection engine
+The core detection engine (detector.py) scans the input text
+against 10 criteria
 
-Criteria weights:
-  HIGH = 3 points
-  MED  = 2 points
-  LOW  = 1 point
-
-Risk levels:
-  0       → CLEAN
-  1–2     → SUSPICIOUS (Low)
-  3–5     → SUSPICIOUS (Medium)
-  6+      → PHISHING (High)
+Score → Risk level:
+  0          →  CLEAN
+  1–2        →  SUSPICIOUS  (Low)
+  3–5        →  SUSPICIOUS  (Medium)
+  6+         →  PHISHING    (High)
 """
 
 import re
-from dataclasses import dataclass, field
-from typing import List, Tuple
+import urllib.request
+import urllib.parse
+import json
+
+# ----------- pyspellchecker ------------
+try:
+    from spellchecker import SpellChecker
+    _spell = SpellChecker()
+    SPELLCHECK_AVAILABLE = True
+except ImportError:
+    SPELLCHECK_AVAILABLE = False
 
 
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
+# ----- PhishTank URL check - checks URLs in the message against PhishTank's known phishing database
+PHISHTANK_API = "https://checkurl.phishtank.com/checkurl/"
 
-@dataclass
+
+def _check_phishtank(url: str) -> bool:
+    """Return True if PhishTank confirms this URL is a known phishing site."""
+    try:
+        data = urllib.parse.urlencode({
+            "url": url,
+            "format": "json",
+            "app_key": ""
+        }).encode()
+        req = urllib.request.Request(
+            PHISHTANK_API, data=data,
+            headers={"User-Agent": "phishing-detector/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode())
+            return result.get("results", {}).get("in_database", False) and \
+                   result.get("results", {}).get("valid", False)
+    except Exception:
+        return False  # offline or API unavailable
+
+
+def _extract_urls(text: str) -> list:
+    """Extract all URLs from the text."""
+    return re.findall(r"https?://[^\s]+", text, re.IGNORECASE)
+
+
+def _check_spelling(text: str) -> str:
+    """
+    Use pyspellchecker to find misspelled words
+    Returns a snippet with the misspelled words or empty string if none found
+    Skips short words, numbers, and Hebrew text
+    """
+    if not SPELLCHECK_AVAILABLE:
+        return ""
+    # Only check English words (skip Hebrew, numbers, short words)
+    words = re.findall(r"[a-zA-Z]{4,}", text)
+    if not words:
+        return ""
+    misspelled = _spell.unknown(words)
+    # Filter out words that are likely proper nouns (capitalized) or technical terms
+    misspelled = {w for w in misspelled if w.islower()}
+    if misspelled:
+        return "Misspelled: " + ", ".join(list(misspelled)[:5])
+    return ""
+
+
+# ------------------------ Data structures -------------------------
 class Match:
-    criterion: str
-    level: str      # HIGH / MED / LOW
-    points: int
-    evidence: str   # the snippet that triggered the rule
+    def __init__(self, criterion, level, points, evidence):
+        self.criterion = criterion
+        self.level = level        # HIGH / MED / LOW
+        self.points = points
+        self.evidence = evidence  # the snippet that triggered the rule
 
 
-@dataclass
 class DetectionResult:
-    result: str          # PHISHING / SUSPICIOUS / CLEAN
-    risk_level: str       # High / Medium / Low / None
-    score: int
-    matches: List[Match] = field(default_factory=list)
+    def __init__(self, result, risk_level, score, matches=None):
+        self.result = result
+        self.risk_level = risk_level
+        self.score = score
+        self.matches = matches if matches is not None else []
 
     def summary(self) -> str:
         lines = [
@@ -57,15 +107,21 @@ class DetectionResult:
         return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Keyword lists
-# ---------------------------------------------------------------------------
-
+# ------------------------------ Keyword lists ----------------------------
 URGENT_KEYWORDS = [
+    # English
     r"\burgent\b", r"\bimmediately\b", r"\bact now\b", r"\bexpires?\b",
     r"\bwithin 24 hours?\b", r"\bwithin \d+ hours?\b", r"\bdeadline\b",
-    r"\bלאלתר\b", r"\bמיידי(?:ת)?\b", r"\bדחוף\b", r"\bתוך 24 שעות\b",
-    r"\bחשבונך יינעל\b", r"\bפעולה נדרשת\b",
+    r"\baction required\b", r"\byour account (?:will be|has been) (?:suspended|locked|blocked|terminated)\b",
+    r"\blast chance\b", r"\bresponse required\b", r"\btime(?:\s+is)?\s+running out\b",
+    r"\bdo not ignore\b", r"\bfinal (?:notice|warning|reminder)\b",
+    r"\bimportant notice\b", r"\bcritical alert\b", r"\bsecurity alert\b",
+    r"\byour (?:account|access) (?:expires?|will expire)\b",
+    # Hebrew
+    r"לאלתר", r"מיידי(?:ת)?", r"דחוף", r"תוך 24 שעות",
+    r"חשבונך יינעל", r"פעולה נדרשת", r"הודעה דחופה",
+    r"נדרשת פעולה", r"חשבונך הושעה", r"חשבונך יחסם",
+    r"אזהרה אחרונה", r"התראה אחרונה",
 ]
 
 SUSPICIOUS_URL_PATTERNS = [
@@ -78,12 +134,25 @@ SUSPICIOUS_URL_PATTERNS = [
 ]
 
 CREDENTIAL_KEYWORDS = [
+    # English
     r"\bpassword\b", r"\bpin\b", r"\bcredit card\b", r"\bcard number\b",
     r"\bcvv\b", r"\bssn\b", r"\bsocial security\b", r"\bbank account\b",
     r"\bverify your (?:account|identity|information|details)\b",
     r"\benter your (?:details|credentials|information|password|pin)\b",
-    r"\bסיסמ[הא]\b", r"\bפרטי כרטיס\b", r"\bמספר תעודת זהות\b",
-    r"\bקוד אימות\b", r"\bOTP\b",
+    r"\bconfirm your (?:identity|details|information|account)\b",
+    r"\bupdate your (?:details|information|payment|billing)\b",
+    r"\bprovide your (?:details|credentials|information)\b",
+    r"\baccount (?:number|details|credentials)\b",
+    r"\bexpiration date\b", r"\bexpiry date\b",
+    r"\bdate of birth\b", r"\bpassport number\b",
+    r"\bsecurity (?:code|question|answer)\b",
+    r"\bone.?time.?(?:password|code|pin)\b", r"\bOTP\b",
+    r"\bverification code\b", r"\bauthentication code\b",
+    # Hebrew
+    r"סיסמ[הא]", r"פרטי כרטיס", r"מספר תעודת זהות",
+    r"קוד אימות", r"קוד חד פעמי", r"פרטי חשבון",
+    r"מספר כרטיס", r"תאריך תפוגה", r"הזן את פרטיך",
+    r"אמת את זהותך", r"עדכן את פרטיך",
 ]
 
 SPOOFED_SENDER_PATTERNS = [
@@ -93,33 +162,65 @@ SPOOFED_SENDER_PATTERNS = [
 ]
 
 REWARD_KEYWORDS = [
+    # English
     r"\byou(?:'ve| have) won\b", r"\bcongratulations?\b", r"\bprize\b",
-    r"\bgift card\b", r"\bclaim your\b", r"\bfree (?:iphone|gift|reward|money|cash)\b",
-    r"\b\$\s*\d{3,}\b",   # large dollar amounts
-    r"\bזכית\b", r"\bפרס\b", r"\bכרטיס מתנה\b", r"\bחינם\b",
+    r"\bgift card\b", r"\bclaim your\b", r"\bfree (?:iphone|gift|reward|money|cash|shipping)\b",
+    r"\b\$\s*\d{3,}\b",
+    r"\byou(?:'ve| have) been selected\b", r"\byou(?:'ve| have) been chosen\b",
+    r"\blucky (?:winner|draw)\b", r"\bspecial (?:offer|reward|bonus)\b",
+    r"\bcash (?:prize|reward|back)\b", r"\bno strings attached\b",
+    r"\b100%\s*free\b", r"\bguaranteed\b", r"\brisk.?free\b",
+    r"\bact before\b", r"\blimited (?:time|offer)\b",
+    r"\bclaim (?:now|today|immediately)\b",
+    # Hebrew
+    r"זכית", r"פרס", r"כרטיס מתנה", r"חינם",
+    r"נבחרת", r"הגרלה", r"מבצע מיוחד", r"קבל עכשיו",
 ]
 
 FEAR_KEYWORDS = [
+    # English
     r"\blegal action\b", r"\blawsuit\b", r"\bpolice\b", r"\barrest\b",
     r"\bsuspended?\b", r"\bblocked?\b", r"\bterminated?\b",
     r"\bfailure to (?:comply|verify|respond)\b",
-    r"\bחסום\b", r"\bהושעה\b", r"\bתביעה משפטית\b", r"\bמשטרה\b",
+    r"\bprosecution\b", r"\bcriminal (?:charges?|complaint)\b",
+    r"\bdebt collector\b", r"\bcollection agency\b",
+    r"\baccount (?:closed|disabled|deactivated)\b",
+    r"\bunauthorized (?:access|activity|transaction)\b",
+    r"\byour (?:data|information) (?:has been|was) (?:compromised|stolen|leaked)\b",
+    # Hebrew
+    r"חסום", r"הושעה", r"תביעה משפטית", r"משטרה",
+    r"עיקול", r"הליך משפטי", r"חוב", r"גבייה",
+    r"חשבונך נחסם", r"פעילות חשודה", r"גישה בלתי מורשית",
 ]
 
 IMPERSONATION_KEYWORDS = [
-    r"\b(?:paypal|amazon|google|microsoft|apple|facebook|instagram)\b",
-    r"\b(?:bank of america|chase|wells fargo|citibank|barclays)\b",
-    r"\b(?:irs|fbi|interpol|government|federal)\b",
-    r"\b(?:בנק לאומי|בנק הפועלים|דיסקונט|מזרחי טפחות)\b",
-    r"\b(?:רשות המסים|ביטוח לאומי|משרד הפנים)\b",
+    # Major tech & finance (English \b works fine)
+    r"\b(?:paypal|amazon|google|microsoft|apple|facebook|instagram|netflix|spotify)\b",
+    r"\b(?:bank of america|chase|wells fargo|citibank|barclays|hsbc|santander)\b",
+    r"\b(?:irs|fbi|interpol|government|federal|homeland security)\b",
+    r"\b(?:dhl|fedex|ups|usps|royal mail)\b",
+    r"\b(?:whatsapp|telegram|twitter|linkedin|dropbox|adobe)\b",
     r"\bsecurity team\b", r"\bsupport team\b", r"\bcustomer service\b",
+    r"\btech support\b", r"\bhelp desk\b", r"\bfraud department\b",
+    # Israeli institutions (no \b for Hebrew)
+    r"בנק לאומי", r"בנק הפועלים", r"דיסקונט", r"מזרחי טפחות",
+    r"בנק יהב", r"בנק אוצר החייל", r"מרכנתיל",
+    r"רשות המסים", r"ביטוח לאומי", r"משרד הפנים",
+    r"משרד האוצר", r"רשות האוכלוסין", r"המוסד לביטוח לאומי",
+    r"בזק", r"הוט", r"סלקום", r"פרטנר", r"019",
 ]
 
 GENERIC_GREETING_PATTERNS = [
-    r"\bdear (?:customer|user|client|account holder|member|valued customer)\b",
-    r"\bhello (?:customer|user|client)\b",
-    r"\bשלום (?:לקוח|משתמש|חבר)\b",
-    r"\bלקוח יקר\b",
+    # English
+    r"\bdear (?:customer|user|client|account holder|member|valued customer|subscriber)\b",
+    r"\bhello (?:customer|user|client|there)\b",
+    r"\bto whom it may concern\b",
+    r"\bgreetings?\b",
+    # Hebrew
+    r"שלום (?:לקוח|משתמש|חבר|מנוי)",
+    r"לקוח יקר",
+    r"משתמש יקר",
+    r"לכבוד הלקוח",
 ]
 
 GRAMMAR_ERROR_PATTERNS = [
@@ -137,11 +238,9 @@ EXCESSIVE_CAPS_THRESHOLD = 0.35  # >35% uppercase letters = suspicious
 EXCESSIVE_EXCLAMATION_COUNT = 3   # 3+ exclamation marks
 
 
-# ---------------------------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------------------------
+# ------------ Helper functions ----------------------
 
-def _find_first(patterns: List[str], text: str, flags=re.IGNORECASE) -> str:
+def _find_first(patterns: list, text: str, flags=re.IGNORECASE) -> str:
     """Return the first matching snippet, or empty string."""
     for pat in patterns:
         m = re.search(pat, text, flags)
@@ -165,17 +264,11 @@ def _check_excessive_caps(text: str) -> str:
     return ""
 
 
-# ---------------------------------------------------------------------------
-# Main detector
-# ---------------------------------------------------------------------------
-
 class PhishingDetector:
-
     def analyze(self, text: str) -> DetectionResult:
-        matches: List[Match] = []
+        matches = []
 
         # --- HIGH criteria ---
-
         evidence = _find_first(URGENT_KEYWORDS, text)
         if evidence:
             matches.append(Match("Urgent language", "HIGH", 3, evidence))
@@ -193,7 +286,6 @@ class PhishingDetector:
             matches.append(Match("Spoofed sender domain", "HIGH", 3, evidence))
 
         # --- MED criteria ---
-
         evidence = _find_first(REWARD_KEYWORDS, text)
         if evidence:
             matches.append(Match("Reward / prize", "MED", 2, evidence))
@@ -211,7 +303,6 @@ class PhishingDetector:
             matches.append(Match("Generic greeting", "MED", 2, evidence))
 
         # --- LOW criteria ---
-
         evidence = _find_first(GRAMMAR_ERROR_PATTERNS, text)
         if evidence:
             matches.append(Match("Grammar / spelling errors", "LOW", 1, evidence))

@@ -1,71 +1,98 @@
 #!/usr/bin/env python3
+# This line called shebang line, it tells the operating system to use python3 to run this file
+# on linux/ mac it allows running the file directly with ./main.py instead of python3 main.py
+# on Windows it does nothing but it kept as a standard convention -____- delete this documentation before sending the code
 """
-Phishing Message Detection System
-main.py — CLI entry point
+Phishing Message Detection System - main.py (entry point)
 
-Usage:
-    python main.py                  # interactive mode
-    python main.py -f message.txt   # analyze a text file
-    python main.py -m "your text"   # analyze inline message
-    python main.py --demo           # run built-in demo examples
+A rule-based classifier that analyzes any text message
+(SMS, email, chat) and determines whether it is a
+phishing attempt
 """
 
 import argparse
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from detector import PhishingDetector
 
 BANNER = """
+
 ╔══════════════════════════════════════════════════╗
-║     PHISHING MESSAGE DETECTION SYSTEM  v1.0      ║
+║     PHISHING MESSAGE DETECTION SYSTEM            ║
 ║     Rule-based classifier · HIGH/MED/LOW         ║
 ╚══════════════════════════════════════════════════╝
 """
 
-DEMO_MESSAGES = [
-    (
-        "High-risk phishing (PayPal)",
-        "Dear Customer, your PayPal account has been suspended. "
-        "Verify your details immediately at http://paypa1-secure.com/login "
-        "or your account will be terminated within 24 hours. "
-        "Enter your password and credit card to restore access."
-    ),
-    (
-        "Medium-risk suspicious (prize scam)",
-        "Congratulations! You have won a $500 Amazon gift card. "
-        "Click here to claim your prize: https://bit.ly/win500now"
-    ),
-    (
-        "Low-risk (generic greeting only)",
-        "Dear valued customer, we wanted to update you about our new service terms. "
-        "Please review them at your convenience on our official website."
-    ),
-    (
-        "Clean message",
-        "Hey, are we still meeting tomorrow at 10am? "
-        "Let me know if you need to reschedule."
-    ),
-    (
-        "Hebrew phishing (SMS)",
-        "שלום לקוח יקר, חשבונך יינעל תוך 24 שעות. "
-        "אנא הזן את סיסמתך ומספר תעודת זהות בקישור: "
-        "http://192.168.1.55/bank/verify"
-    ),
+DEMO_FILES = [
+    # English - High risk
+    ("EN · High  · PayPal phishing",          "en_high_paypal.txt"),
+    ("EN · High  · Bank + legal threat",      "en_high_bank.txt"),
+    ("EN · High  · Microsoft credential",     "en_high_microsoft.txt"),
+    ("EN · High  · IRS scam",                 "en_high_irs.txt"),
+    # English - Medium risk
+    ("EN · Med   · Prize scam",               "en_medium_prize.txt"),
+    ("EN · Med   · Account threat",           "en_medium_threat.txt"),
+    ("EN · Med   · Google impersonation",     "en_medium_impersonation.txt"),
+    # English - Low risk
+    ("EN · Low   · Excessive CAPS",           "en_low_caps.txt"),
+    ("EN · Low   · Grammar errors",           "en_low_grammar.txt"),
+    # English - Clean
+    ("EN · Clean · Casual message",           "en_clean_1.txt"),
+    ("EN · Clean · Appointment reminder",     "en_clean_2.txt"),
+    # Hebrew - High risk
+    ("HE · High  · Bank phishing",            "he_high_bank.txt"),
+    ("HE · High  · Tax authority scam",       "he_high_tax.txt"),
+    ("HE · High  · Insurance phishing",       "he_high_insurance.txt"),
+    # Hebrew - Medium risk
+    ("HE · Med   · Prize scam",               "he_medium_prize.txt"),
+    ("HE · Med   · Account threat",           "he_medium_threat.txt"),
+    # Hebrew - Clean
+    ("HE · Clean · Casual message",           "he_clean.txt"),
 ]
 
 
+def get_examples_dir() -> str:
+    """Return the path to the examples/ directory relative to this file"""
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "..", "examples")
+
+
+def load_example(filename: str) -> str:
+    """Loads a message from the examples directory."""
+    path = os.path.join(get_examples_dir(), filename)
+    if not os.path.exists(path):
+        return f"[File not found: {filename}]"
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
 def run_demo(detector: PhishingDetector):
-    print("\n" + "━" * 52)
-    print("  DEMO MODE — 5 example messages")
-    print("━" * 52)
-    for i, (label, msg) in enumerate(DEMO_MESSAGES, 1):
-        print(f"\n[{i}/5] {label}")
-        preview = msg[:90] + ("..." if len(msg) > 90 else "")
-        print(f'  Message: "{preview}"')
+    """Run all demo examples loaded from the examples/ directory."""
+    total = len(DEMO_FILES)
+    score_distribution = {"High": 0, "Medium": 0, "Low": 0, "None": 0}
+
+    print(f"\n{'━' * 52}")
+    print(f"  DEMO MODE — {total} example messages")
+    print(f"{'━' * 52}")
+
+    for i, (label, filename) in enumerate(DEMO_FILES, 1):
+        msg = load_example(filename)
         result = detector.analyze(msg)
+        score_distribution[result.risk_level] += 1
+
+        print(f"\n[{i}/{total}] {label}  ({filename})")
+        preview = msg[:90].replace("\n", " ") + ("..." if len(msg) > 90 else "")
+        print(f'  Message: "{preview}"')
         print(result.summary())
+
+    # Score distribution summary
+    print(f"\n{'━' * 52}")
+    print("  SCORE DISTRIBUTION ACROSS ALL EXAMPLES")
+    print(f"{'━' * 52}")
+    for level in ["High", "Medium", "Low", "None"]:
+        bar = "█" * score_distribution[level]
+        print(f"  {level:<8} : {bar} ({score_distribution[level]})")
+    print(f"{'━' * 52}\n")
 
 
 def run_interactive(detector: PhishingDetector):
@@ -100,12 +127,10 @@ def run_interactive(detector: PhishingDetector):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Phishing Message Detection System"
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--message", help="Analyze a single message string")
     parser.add_argument("-f", "--file",    help="Analyze message from a text file")
-    parser.add_argument("--demo", action="store_true", help="Run built-in demo examples")
+    parser.add_argument("--demo", action="store_true", help="Run built in demo examples")
     args = parser.parse_args()
 
     detector = PhishingDetector()

