@@ -1,0 +1,12 @@
+Subject: [CRITICAL] Unauthorized access detected - Microsoft Account
+
+Dear User,
+
+Microsoft Security Team has detected that someone tried to sign into your account from an unknown device.
+
+Your account will be blocked within 1 hour unless you verify your identity immediately at:
+http://microsoft-account-verify.secure-login.net/confirm
+
+Enter your password and date of birth to confirm it was you.
+
+Do not ignore this message. Legal action may follow if account is not verified.

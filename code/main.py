@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# This line called shebang line, it tells the operating system to use python3 to run this file
-# on linux/ mac it allows running the file directly with ./main.py instead of python3 main.py
-# on Windows it does nothing but it kept as a standard convention -____- delete this documentation before sending the code
 """
 Phishing Message Detection System - main.py (entry point)
 
@@ -13,7 +10,7 @@ phishing attempt
 import argparse
 import sys
 import os
-from detector import PhishingDetector
+from detector import PhishingDetector, _fix_rtl
 
 BANNER = """
 
@@ -23,31 +20,49 @@ BANNER = """
 ╚══════════════════════════════════════════════════╝
 """
 
+# demo files - (label, filename inside examples/)
 DEMO_FILES = [
-    # English - High risk
-    ("EN · High  · PayPal phishing",          "en_high_paypal.txt"),
-    ("EN · High  · Bank + legal threat",      "en_high_bank.txt"),
-    ("EN · High  · Microsoft credential",     "en_high_microsoft.txt"),
-    ("EN · High  · IRS scam",                 "en_high_irs.txt"),
-    # English - Medium risk
-    ("EN · Med   · Prize scam",               "en_medium_prize.txt"),
-    ("EN · Med   · Account threat",           "en_medium_threat.txt"),
-    ("EN · Med   · Google impersonation",     "en_medium_impersonation.txt"),
-    # English - Low risk
-    ("EN · Low   · Excessive CAPS",           "en_low_caps.txt"),
-    ("EN · Low   · Grammar errors",           "en_low_grammar.txt"),
-    # English - Clean
-    ("EN · Clean · Casual message",           "en_clean_1.txt"),
-    ("EN · Clean · Appointment reminder",     "en_clean_2.txt"),
-    # Hebrew - High risk
-    ("HE · High  · Bank phishing",            "he_high_bank.txt"),
-    ("HE · High  · Tax authority scam",       "he_high_tax.txt"),
-    ("HE · High  · Insurance phishing",       "he_high_insurance.txt"),
-    # Hebrew - Medium risk
-    ("HE · Med   · Prize scam",               "he_medium_prize.txt"),
-    ("HE · Med   · Account threat",           "he_medium_threat.txt"),
-    # Hebrew - Clean
-    ("HE · Clean · Casual message",           "he_clean.txt"),
+    #  English - High risk
+    ("EN - High  - PayPal phishing",          "en_high_paypal.txt"),
+    ("EN - High  - Bank + legal threat",      "en_high_bank.txt"),
+    ("EN - High  - Microsoft credential",     "en_high_microsoft.txt"),
+    ("EN - High  - IRS scam",                 "en_high_irs.txt"),
+    #  English - High risk =
+    ("EN - High  - Real PayPal suspend",      "en_high_real_1.txt"),
+    ("EN - High  - Real Netflix billing",     "en_high_real_2.txt"),
+    ("EN - High  - Real Microsoft block",     "en_high_real_3.txt"),
+    #  English - Medium risk
+    ("EN - Med   - Prize scam",               "en_medium_prize.txt"),
+    ("EN - Med   - Account threat",           "en_medium_threat.txt"),
+    ("EN - Med   - Google impersonation",     "en_medium_impersonation.txt"),
+    #  English - Low risk
+    ("EN - Low   - Excessive CAPS",           "en_low_caps.txt"),
+    ("EN - Low   - Grammar errors",           "en_low_grammar.txt"),
+    #  English - Random
+    ("EN - Random - Prize + URL",              "en_random_1.txt"),
+    ("EN - Random - Casual chat",              "en_random_2.txt"),
+    #  English - Clean
+    ("EN - Clean - Casual message",           "en_clean_1.txt"),
+    ("EN - Clean - Appointment reminder",     "en_clean_2.txt"),
+    ("EN - Clean - Real work email",          "en_real_clean_1.txt"),
+    ("EN - Clean - Real Amazon order",        "en_real_clean_2.txt"),
+    ("EN - Clean - Real dental reminder",     "en_real_clean_3.txt"),
+    #  Hebrew - High risk
+    ("HE - High  - Bank phishing",            "he_high_bank.txt"),
+    ("HE - High  - Tax authority scam",       "he_high_tax.txt"),
+    ("HE - High  - Insurance phishing",       "he_high_insurance.txt"),
+    #  Hebrew - High risk
+    ("HE - High  - Real bank suspend",        "he_high_real_1.txt"),
+    ("HE - High  - Real tax refund scam",     "he_high_real_2.txt"),
+    #  Hebrew - Medium risk
+    ("HE - Med   - Prize scam",               "he_medium_prize.txt"),
+    ("HE - Med   - Account threat",           "he_medium_threat.txt"),
+    #  Hebrew - Random
+    ("HE - Random - Phishing SMS",             "he_random_1.txt"),
+    ("HE - Random - Casual chat",              "he_random_2.txt"),
+    #  Hebrew - Clean
+    ("HE - Clean - Casual message",           "he_clean.txt"),
+    ("HE - Clean - Real work email",          "he_real_clean_1.txt"),
 ]
 
 
@@ -67,7 +82,7 @@ def load_example(filename: str) -> str:
 
 
 def run_demo(detector: PhishingDetector):
-    """Run all demo examples loaded from the examples/ directory."""
+    """Runs all the demo examples loaded from the examples/ directory."""
     total = len(DEMO_FILES)
     score_distribution = {"High": 0, "Medium": 0, "Low": 0, "None": 0}
 
@@ -81,11 +96,10 @@ def run_demo(detector: PhishingDetector):
         score_distribution[result.risk_level] += 1
 
         print(f"\n[{i}/{total}] {label}  ({filename})")
-        preview = msg[:90].replace("\n", " ") + ("..." if len(msg) > 90 else "")
+        preview = _fix_rtl(msg[:90].replace("\n", " ")) + ("..." if len(msg) > 90 else "")
         print(f'  Message: "{preview}"')
         print(result.summary())
 
-    # Score distribution summary
     print(f"\n{'━' * 52}")
     print("  SCORE DISTRIBUTION ACROSS ALL EXAMPLES")
     print(f"{'━' * 52}")

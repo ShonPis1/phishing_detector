@@ -1,0 +1,13 @@
+From: security@paypa1-alert.com
+Dear PayPal Customer,
+
+We have noticed unusual activity on your PayPal account. Your account access has been temporarily limited.
+
+To restore your account, please verify your information within 24 hours:
+http://paypal-secure-verify.com/restore
+
+You will need to provide: full name, credit card number, expiration date, CVV, and Social Security Number.
+
+Failure to verify will result in permanent account suspension.
+
+PayPal Security Team

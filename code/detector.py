@@ -1,6 +1,11 @@
 """
-The core detection engine (detector.py) scans the input text
-against 10 criteria
+Phishing Message Detection System
+detector.py — Core detection engine
+
+Detection layers:
+  1. Rule-based regex — 10 criteria across HIGH / MED / LOW
+  2. Spellchecker     — pyspellchecker (use by pip install pyspellchecker)
+  3. PhishTank        — real time URL check against known phishing DB
 
 Score → Risk level:
   0          →  CLEAN
@@ -14,7 +19,22 @@ import urllib.request
 import urllib.parse
 import json
 
-# ----------- pyspellchecker ------------
+# python-bidi - fixes Hebrew text display in left-to-right terminals
+try:
+    from bidi.algorithm import get_display
+    BIDI_AVAILABLE = True
+except ImportError:
+    BIDI_AVAILABLE = False
+
+
+def _fix_rtl(text: str) -> str:
+    """Reverse Hebrew text direction for correct display in LTR terminals."""
+    if not BIDI_AVAILABLE:
+        return text
+    return get_display(text)
+
+
+# ----------- pyspellchecker detects misspelled English words in the message ------------
 try:
     from spellchecker import SpellChecker
     _spell = SpellChecker()
@@ -41,6 +61,8 @@ def _check_phishtank(url: str) -> bool:
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             result = json.loads(resp.read().decode())
+            # in_database - URL exists in PhishTank
+            # valid = it was confirmed as phishing
             return result.get("results", {}).get("in_database", False) and \
                    result.get("results", {}).get("valid", False)
     except Exception:
@@ -48,47 +70,50 @@ def _check_phishtank(url: str) -> bool:
 
 
 def _extract_urls(text: str) -> list:
-    """Extract all URLs from the text."""
+    """Extract all URLs from the text to pass to PhishTank."""
     return re.findall(r"https?://[^\s]+", text, re.IGNORECASE)
 
 
 def _check_spelling(text: str) -> str:
     """
-    Use pyspellchecker to find misspelled words
-    Returns a snippet with the misspelled words or empty string if none found
-    Skips short words, numbers, and Hebrew text
+    Use pyspellchecker to find misspelled English words
+    Returns a summary string of misspelled words or empty string if none found
     """
     if not SPELLCHECK_AVAILABLE:
         return ""
-    # Only check English words (skip Hebrew, numbers, short words)
-    words = re.findall(r"[a-zA-Z]{4,}", text)
+    # Remove URLs before checking — otherwise 'http', 'paypa', etc. are flagged
+    clean_text = re.sub(r"https?://\S+", "", text)
+    words = re.findall(r"[a-zA-Z]{4,}", clean_text)
     if not words:
         return ""
     misspelled = _spell.unknown(words)
-    # Filter out words that are likely proper nouns (capitalized) or technical terms
+    # Keep only lowercase words
     misspelled = {w for w in misspelled if w.islower()}
     if misspelled:
         return "Misspelled: " + ", ".join(list(misspelled)[:5])
     return ""
 
 
-# ------------------------ Data structures -------------------------
+# ----------------------------- Data structures --------------------------
 class Match:
+    """Represents a single triggered detection criterion."""
     def __init__(self, criterion, level, points, evidence):
-        self.criterion = criterion
-        self.level = level        # HIGH / MED / LOW
-        self.points = points
-        self.evidence = evidence  # the snippet that triggered the rule
+        self.criterion = criterion  # name of the criterion
+        self.level = level          # HIGH / MED / LOW
+        self.points = points        # score contribution
+        self.evidence = evidence    # exact snippet from the message that triggered it
 
 
 class DetectionResult:
+    """The full analysis result returned by PhishingDetector.analyze()."""
     def __init__(self, result, risk_level, score, matches=None):
-        self.result = result
-        self.risk_level = risk_level
-        self.score = score
+        self.result = result          # PHISHING / SUSPICIOUS / CLEAN
+        self.risk_level = risk_level  # High / Medium / Low / None
+        self.score = score            # total accumulated score
         self.matches = matches if matches is not None else []
 
     def summary(self) -> str:
+        """Return a formatted string summary for terminal output."""
         lines = [
             "=" * 52,
             f"  RESULT    : {self.result}",
@@ -100,14 +125,15 @@ class DetectionResult:
             lines.append("  TRIGGERED CRITERIA:")
             for m in self.matches:
                 lines.append(f"    [{m.level:4s} +{m.points}]  {m.criterion}")
-                lines.append(f"             → \"{m.evidence[:80]}\"")
+                # _fix_rtl ensures Hebrew text displays correctly in Windows CMD
+                lines.append(f"             → \"{_fix_rtl(m.evidence[:80])}\"")
         else:
             lines.append("  No suspicious patterns detected.")
         lines.append("=" * 52)
         return "\n".join(lines)
 
 
-# ------------------------------ Keyword lists ----------------------------
+# ------------ Keyword lists -----------------------
 URGENT_KEYWORDS = [
     # English
     r"\burgent\b", r"\bimmediately\b", r"\bact now\b", r"\bexpires?\b",
@@ -125,11 +151,11 @@ URGENT_KEYWORDS = [
 ]
 
 SUSPICIOUS_URL_PATTERNS = [
-    r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",   # IP-based URL
+    r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",                            # IP-based URL
     r"https?://(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|short\.link)/\S+",  # URL shorteners
-    r"[a-z0-9\-]+(?:0|1|3|4|@)[a-z0-9\-]+\.[a-z]{2,}",  # typosquatting (digit/@ in domain)
-    r"(?:[a-z]+\.){3,}[a-z]{2,}",                        # excessive subdomains
-    r"https?://[^\s]*-(?:secure|login|verify|update|account)[^\s]*",  # suspicious path keywords
+    r"[a-z0-9\-]+(?:0|1|3|4|@)[a-z0-9\-]+\.[a-z]{2,}",                         # typosquatting (digit/@ in domain)
+    r"(?:[a-z]+\.){3,}[a-z]{2,}",                                                # excessive subdomains
+    r"https?://[^\s]*-(?:secure|login|verify|update|account)[^\s]*",             # suspicious path keywords
     r"https?://[^\s]*(?:paypal|amazon|google|microsoft|apple|bank)[^\s]*\.[a-z]{2,}(?!\.[a-z])",
 ]
 
@@ -155,8 +181,8 @@ CREDENTIAL_KEYWORDS = [
     r"אמת את זהותך", r"עדכן את פרטיך",
 ]
 
+
 SPOOFED_SENDER_PATTERNS = [
-    # email address where display name contains a known brand but domain doesn't match
     r"(?:paypal|amazon|google|microsoft|apple|facebook|instagram|bank)\s*[<(][^>)]*@(?!paypal\.com|amazon\.com|google\.com|microsoft\.com|apple\.com|facebook\.com|instagram\.com)",
     r"@[a-z0-9\-]*(?:paypa1|amaz0n|g00gle|micros0ft|app1e)[a-z0-9\-]*\.",
 ]
@@ -193,8 +219,9 @@ FEAR_KEYWORDS = [
     r"חשבונך נחסם", r"פעילות חשודה", r"גישה בלתי מורשית",
 ]
 
+
 IMPERSONATION_KEYWORDS = [
-    # Major tech & finance (English \b works fine)
+    # Major tech & finance
     r"\b(?:paypal|amazon|google|microsoft|apple|facebook|instagram|netflix|spotify)\b",
     r"\b(?:bank of america|chase|wells fargo|citibank|barclays|hsbc|santander)\b",
     r"\b(?:irs|fbi|interpol|government|federal|homeland security)\b",
@@ -202,7 +229,7 @@ IMPERSONATION_KEYWORDS = [
     r"\b(?:whatsapp|telegram|twitter|linkedin|dropbox|adobe)\b",
     r"\bsecurity team\b", r"\bsupport team\b", r"\bcustomer service\b",
     r"\btech support\b", r"\bhelp desk\b", r"\bfraud department\b",
-    # Israeli institutions (no \b for Hebrew)
+    # Israeli institutions
     r"בנק לאומי", r"בנק הפועלים", r"דיסקונט", r"מזרחי טפחות",
     r"בנק יהב", r"בנק אוצר החייל", r"מרכנתיל",
     r"רשות המסים", r"ביטוח לאומי", r"משרד הפנים",
@@ -224,27 +251,31 @@ GENERIC_GREETING_PATTERNS = [
 ]
 
 GRAMMAR_ERROR_PATTERNS = [
-    r"\b\w+ed\s+\w+ed\b",           # double past tense
-    r"\bis\s+been\b",               # "is been"
+    r"\b\w+ed\s+\w+ed\b",           # double past tense e.g. "been suspended"
+    r"\bis\s+been\b",               # "is been" — incorrect English
     r"\bare\s+been\b",
-    r"\bplease\s+to\s+\w+\b",       # "please to click"
+    r"\bplease\s+to\s+\w+\b",       # "please to click" — incorrect English
     r"\byour\s+account\s+is\s+(?:compromized|comprimised|suspendid|deactiveted)\b",
-    r"\bcompromized\b", r"\bcompromised\b",  # common misspellings
-    r"\bverfiy\b", r"\bverifiy\b", r"\bverrify\b",
-    r"\bimmidiately\b", r"\burgant\b",
+    r"\bcompromized\b",             # common misspelling of "compromised"
+    r"\bverfiy\b", r"\bverifiy\b", r"\bverrify\b",  # misspellings of "verify"
+    r"\bimmidiately\b", r"\burgant\b",               # misspellings
 ]
 
-EXCESSIVE_CAPS_THRESHOLD = 0.35  # >35% uppercase letters = suspicious
-EXCESSIVE_EXCLAMATION_COUNT = 3   # 3+ exclamation marks
+
+EXCESSIVE_CAPS_THRESHOLD = 0.35   # flag if >35% of letters are uppercase
+EXCESSIVE_EXCLAMATION_COUNT = 3   # flag if 3 or more exclamation marks
 
 
-# ------------ Helper functions ----------------------
-
+# ------------------ helper functions ---------------------------
 def _find_first(patterns: list, text: str, flags=re.IGNORECASE) -> str:
-    """Return the first matching snippet, or empty string."""
+    """
+    Scans the text against a list of regex patterns
+    Returns a short context snippet around the first match or empty string
+    """
     for pat in patterns:
         m = re.search(pat, text, flags)
         if m:
+            # grab 15 chars of context on each side of the match
             start = max(0, m.start() - 15)
             end = min(len(text), m.end() + 15)
             return text[start:end].strip()
@@ -252,7 +283,6 @@ def _find_first(patterns: list, text: str, flags=re.IGNORECASE) -> str:
 
 
 def _check_excessive_caps(text: str) -> str:
-    """Return evidence string if excessive caps/exclamation detected."""
     letters = [c for c in text if c.isalpha()]
     exclamations = text.count("!")
     if letters and (sum(1 for c in letters if c.isupper()) / len(letters)) > EXCESSIVE_CAPS_THRESHOLD:
@@ -266,9 +296,13 @@ def _check_excessive_caps(text: str) -> str:
 
 class PhishingDetector:
     def analyze(self, text: str) -> DetectionResult:
+        """
+        Analyze a text message and return a DetectionResult
+        Runs all detection layers in order regex → spellcheck → PhishTank.
+        """
         matches = []
 
-        # --- HIGH criteria ---
+        # --- HIGH criteria (3 pts each) ---
         evidence = _find_first(URGENT_KEYWORDS, text)
         if evidence:
             matches.append(Match("Urgent language", "HIGH", 3, evidence))
@@ -285,7 +319,7 @@ class PhishingDetector:
         if evidence:
             matches.append(Match("Spoofed sender domain", "HIGH", 3, evidence))
 
-        # --- MED criteria ---
+        # --- MED criteria (2 pts each) ---
         evidence = _find_first(REWARD_KEYWORDS, text)
         if evidence:
             matches.append(Match("Reward / prize", "MED", 2, evidence))
@@ -302,16 +336,28 @@ class PhishingDetector:
         if evidence:
             matches.append(Match("Generic greeting", "MED", 2, evidence))
 
-        # --- LOW criteria ---
+        # --- LOW criteria (1 pt each) ---
+        # regex-based grammar check
         evidence = _find_first(GRAMMAR_ERROR_PATTERNS, text)
         if evidence:
-            matches.append(Match("Grammar / spelling errors", "LOW", 1, evidence))
+            matches.append(Match("Grammar / spelling errors (regex)", "LOW", 1, evidence))
+
+        # library-based spellcheck
+        evidence = _check_spelling(text)
+        if evidence:
+            matches.append(Match("Spelling errors (spellchecker)", "LOW", 1, evidence))
 
         evidence = _check_excessive_caps(text)
         if evidence:
             matches.append(Match("Excessive CAPS / exclamation", "LOW", 1, evidence))
 
-        # --- Score & classify ---
+        # PhishTank (HIGH +3 if URL confirmed in database)
+        urls = _extract_urls(text)
+        for url in urls:
+            if _check_phishtank(url):
+                matches.append(Match("PhishTank confirmed phishing URL", "HIGH", 3, url))
+                break
+
         score = sum(m.points for m in matches)
 
         if score == 0:

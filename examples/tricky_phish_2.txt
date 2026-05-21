@@ -1,0 +1,3 @@
+Your recent transaction of $1,247.00 could not be processed.
+To avoid service interruption please update your billing at:
+http://192.168.44.12/billing/update

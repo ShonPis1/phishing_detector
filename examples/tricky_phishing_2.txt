@@ -1,0 +1,4 @@
+Your package could not be delivered today due to incomplete address.
+To reschedule delivery please confirm your details:
+https://bit.ly/delivery-reschedule-now
+Failure to respond within 48 hours will return the package to sender.
