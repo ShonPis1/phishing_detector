@@ -16,10 +16,10 @@ Scans the text against keyword lists grouped by severity:
 | LOW   | 1 | Grammar errors (regex), Spelling errors (spellchecker), Excessive CAPS |
 
 ### Layer 2 — Spellchecker (offline)
-Uses `pyspellchecker` to detect misspelled English words — a common sign of phishing messages written by non-native speakers or auto-generated text.
+Uses `pyspellchecker` to detect misspelled English words - a common sign of phishing messages written by non-native speakers or auto-generated text
 
 ### Layer 3 — PhishTank URL check (online, optional)
-Extracts all URLs from the message and checks each one against [PhishTank](https://www.phishtank.com/), a public database of confirmed phishing URLs. If a URL is confirmed, it adds 3 points (HIGH). Falls back silently if there is no internet connection.
+Extracts all URLs from the message and checks each one against [PhishTank](https://www.phishtank.com/), a public database of confirmed phishing URLs. If a URL is confirmed, it adds 3 points (HIGH). Falls back if there is no internet connection.
 
 ---
 
@@ -32,7 +32,7 @@ Extracts all URLs from the message and checks each one against [PhishTank](https
 | 3–5 | SUSPICIOUS | Medium |
 | 6+ | PHISHING | High |
 
-A message is classified as **PHISHING** (score ≥ 6) only when multiple criteria fire together — no single signal is enough on its own.
+A message is classified as **PHISHING** (score ≥ 6) only when multiple criteria fire together - no single signal is enough on its own
 
 ---
 
@@ -45,7 +45,7 @@ A message is classified as **PHISHING** (score ≥ 6) only when multiple criteri
 pip install pyspellchecker
 ```
 
-If not installed, the system still works — the spellcheck criterion is skipped gracefully.
+If not installed, the system still works - the spellcheck criterion is skipped
 
 ---
 
