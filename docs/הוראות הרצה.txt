@@ -1,0 +1,17 @@
+התקן את הספריות הנדרשות:
+pip install pyspellchecker python-bidi
+
+לאחר מכן כל הפקודות מתוך תיקיית code/:
+cd code
+python main.py - מצב אינטרקטיבי שבו אפשר להקליד בזמן אמת הודעה ולנתח אותה
+
+python main.py -m "" - ניתוח הודעה ישירות משורת ההרצה
+
+python main.py -f .. - ניתוח קובץ טקסט
+
+python main.py --demo - הרצת כל הדוגמאות שנבדקו (30)
+
+
+
+* מצרף גם קישור לrepo שפתחתי למערכת לנוחיות שלי ולשמירה של המערכת, וכרגע במצב public כדי שתוכלו לראות אם צריך דוגמאות הרצה והסבר מפורט יותר....
+https://github.com/ShonPis1/phishing_detector
